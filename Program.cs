@@ -3,19 +3,16 @@ using System;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
 using System.IO;
+using System.Diagnostics;
 
 namespace AppIdExtract {
 	class Program {
 		public static string InFile    = "";
 		public static string OutFile   = "AppIdExtract.out";
-		public static bool   Showtime  = true;
 		public static long   SkipBytes = 0;
 		public static double Speed     = 0;
 		public static double Completed = 0;
-		
-		public static DateTime Start   = DateTime.Now;
-
-		public static System.Diagnostics.Stopwatch sw = null;
+		public static Stopwatch Watch  = new Stopwatch();
 
 		public static void Main(string[] args) {
 			ShowHeader("AppIdExtract by WendyH v <c:White>" + System.Reflection.Assembly.GetExecutingAssembly().GetName().Version.ToString());
@@ -27,10 +24,7 @@ namespace AppIdExtract {
 			if (InFile.Length == 0  ) Program.Quit("<c:Red>Not specified <c:DarkCyan>input</c> file.");
 			if (!File.Exists(InFile)) Program.Quit("<c:Red>Not exists <c:DarkCyan>input</c> file.");
 
-			if (Showtime) {
-				sw = new System.Diagnostics.Stopwatch();
-				sw.Start();
-			}
+			Watch.Start();
 
 			Regex regex = new Regex(@"store/apps/details\?id=([\w\.\d_]+)[^>]+title=", RegexOptions.Compiled);
 
@@ -39,21 +33,26 @@ namespace AppIdExtract {
 			string line = "";
 			int    apps = 0;
 			long   size = 0;
+			long   step = 0;
 			MatchCollection mc;
 
-			using (StreamWriter sw = File.CreateText(OutFile)) {
-				using (StreamReader sr = File.OpenText(InFile)) {
-					Message("File size   : <c:DarkCyan>" + sr.BaseStream.Length);
-					while ((line = sr.ReadLine()) != null) {
-						Message(GetConsoleStatusLine(apps, sr.BaseStream.Length, sr.BaseStream.Position));
+			using (StreamWriter writer = File.CreateText(OutFile)) {
+				using (StreamReader reader = File.OpenText(InFile)) {
+					Message("File size   : <c:DarkCyan>" + reader.BaseStream.Length);
+					while ((line = reader.ReadLine()) != null) {
+						long part = Watch.ElapsedMilliseconds / 1000;
+                        if (part != step) {
+							step = part;
+							Message(GetConsoleStatusLine(apps, reader.BaseStream.Length, reader.BaseStream.Position));
+						}
 						mc = regex.Matches(line);
 						foreach (Match m in mc) {
-							sw.WriteLine(m.Groups[1].Value);
+							writer.WriteLine(m.Groups[1].Value);
 							apps++;
 						}
 					}
 				}
-				size = sw.BaseStream.Length;
+				size = writer.BaseStream.Length;
 			}
 			Message("");
 			Program.Quit("Done. Saved results in <c:DarkCyan>" + OutFile + "</c>. Found apps: <c:Magenta>" + apps + "</c> File size: <c:Magenta>" + size);
@@ -64,8 +63,8 @@ namespace AppIdExtract {
 		/// </summary>
 		/// <param name="len">Length of line in chars</param>
 		/// <returns>Returns the string with progress, speed and time remaining.</returns>
-		public static string GetConsoleStatusLine(int apps, long totalBytes, long bytesRead, int len = 80) {
-			double totalMS = (DateTime.Now - Start).TotalMilliseconds;
+		public static string GetConsoleStatusLine(int apps, long totalBytes, long bytesRead, int len = 64) {
+			long totalMS = Watch.ElapsedMilliseconds;
 			if ((totalBytes > 0) && (totalMS > 0)) {
 				// BytesRead/totalMS is in bytes/ms. Convert to kb/sec.
 				Speed     = ((bytesRead - SkipBytes) * 1000.0f) / (totalMS * 1024.0f);
@@ -104,9 +103,9 @@ namespace AppIdExtract {
 		/// <param name="msg">Message with quit. Optional.</param>
 		public static void Quit(string msg = "") {
 			Message(msg);
-			if (sw != null) {
-				sw.Stop();
-				Program.Message("\n\r<c:DarkCyan>Time elapsed: <c:DarkGray>" + sw.Elapsed);
+			if (Watch != null) {
+				Watch.Stop();
+				Program.Message("\n\r<c:DarkCyan>Time elapsed: <c:DarkGray>" + Watch.Elapsed);
 			}
 			Environment.Exit(0);
 		}
